@@ -10,13 +10,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 // avisa pro spring que aqui fica a regra de negocio
 @Service
 public class EstacionamentoService {
 
-    // injeta os repositorios pra acessar o banco
     @Autowired
     private ZonaEstacionamentoRepository zonaRepository;
 
@@ -26,26 +26,27 @@ public class EstacionamentoService {
     @Autowired
     private RegistroOcupacaoRepository registroRepository;
 
-    // se der erro no meio do processo ele desfaz tudo no banco (rollback)
     @Transactional
     public String realizarCheckIn(Long idUsuario, Long idZona) {
         
-        // puxa usuario e zona pelo id q vem do app
+        RegistroOcupacao registroAtivo = registroRepository.findFirstByUsuarioIdUsuarioAndStatusRegistro(idUsuario, "ativo");
+        
+        if (registroAtivo != null) {
+            return "erro: você já possui um estacionamento ativo na zona: " + registroAtivo.getZona().getNomeZona();
+        }
+
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new RuntimeException("usuario nao encontrado"));
                 
         ZonaEstacionamento zona = zonaRepository.findById(idZona)
                 .orElseThrow(() -> new RuntimeException("zona nao encontrada"));
 
-        // ve se ja ta lotado
         if (zona.getVagasOcupadas() >= zona.getCapacidadeMaxima()) {
             return "erro: zona lotada";
         }
 
-        // soma 1 carro na vaga
         zona.setVagasOcupadas(zona.getVagasOcupadas() + 1);
 
-        // atualiza o status de lotacao da zona
         if (zona.getVagasOcupadas().equals(zona.getCapacidadeMaxima())) {
             zona.setStatusLotacao("lotado");
         } else {
@@ -53,7 +54,6 @@ public class EstacionamentoService {
         }
         zonaRepository.save(zona); 
 
-        // salva o historico do qr code com a hora de entrada
         RegistroOcupacao novoRegistro = new RegistroOcupacao();
         novoRegistro.setUsuario(usuario);
         novoRegistro.setZona(zona);
@@ -62,35 +62,42 @@ public class EstacionamentoService {
         
         registroRepository.save(novoRegistro); 
 
-        // deu bom, retorna msg de sucesso
         return "check-in feito na zona: " + zona.getNomeZona();
     }
 
-    // regra do checkout: acha o registro aberto, poe a hora de saida e devolve a vaga
     @Transactional
     public String realizarCheckOut(Long idUsuario) {
         
-        // busca o registro que ta rolando agora pra esse usuario
         RegistroOcupacao registro = registroRepository.findFirstByUsuarioIdUsuarioAndStatusRegistro(idUsuario, "ativo");
         
         if (registro == null) {
             return "erro: nenhum check-in ativo encontrado pra esse usuario";
         }
 
-        // finaliza o registro colocando a hora atual e mudando o status
+        // 1. Regista a hora de saída
         registro.setDataHoraSaida(LocalDateTime.now());
         registro.setStatusRegistro("finalizado");
         registroRepository.save(registro);
 
-        // puxa a zona que o cara tava estacionado
+        // 2. Calcula o tempo de permanência
+        Duration duracao = Duration.between(registro.getDataHoraEntrada(), registro.getDataHoraSaida());
+        long horas = duracao.toHours();
+        long minutos = duracao.toMinutesPart();
+        
+        String tempoFormatado;
+        if (horas > 0) {
+            tempoFormatado = horas + " hora(s) e " + minutos + " minuto(s)";
+        } else {
+            tempoFormatado = minutos + " minuto(s)";
+        }
+
+        // 3. Liberta a vaga
         ZonaEstacionamento zona = registro.getZona();
         
-        // devolve a vaga (subtrai 1 dos ocupados)
         if (zona.getVagasOcupadas() > 0) {
             zona.setVagasOcupadas(zona.getVagasOcupadas() - 1);
         }
 
-        // atualiza a flag visual de lotacao
         if (zona.getVagasOcupadas() == 0) {
             zona.setStatusLotacao("vazio");
         } else {
@@ -99,6 +106,7 @@ public class EstacionamentoService {
         
         zonaRepository.save(zona);
 
-        return "check-out feito com sucesso. vaga liberada na zona: " + zona.getNomeZona();
+        // 4. Devolve a mensagem final com o cálculo de tempo
+        return "Vaga libertada. Tempo de permanência: " + tempoFormatado + ".";
     }
 }
