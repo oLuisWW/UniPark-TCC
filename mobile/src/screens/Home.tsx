@@ -1,33 +1,38 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Alert, TouchableOpacity, FlatList } from 'react-native';
+import { StyleSheet, Text, View, Alert, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { api } from '../services/api';
 
 export default function Home({ setTelaAtual, idUsuarioLogado, setIdUsuarioLogado }: any) {
   const [zonas, setZonas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false); // Loading da lista
+  const [loadingCheckout, setLoadingCheckout] = useState(false); // Loading do botão sair
 
-  // Busca as zonas e vagas disponíveis na API
   const carregarZonas = async () => {
+    setLoading(true);
     try {
       const resposta = await api.get('/api/zonas');
       setZonas(resposta.data);
     } catch (erro) {
       console.log("Erro ao carregar zonas", erro);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Executa ao abrir a tela
   useEffect(() => {
     carregarZonas();
   }, []);
 
-  // Finaliza o estacionamento
   const handleCheckout = async () => {
+    setLoadingCheckout(true);
     try {
       const resposta = await api.post('/api/estacionamento/checkout', null, { params: { idUsuario: idUsuarioLogado } });
       Alert.alert("Saída Liberada!", resposta.data);
-      carregarZonas(); // Atualiza a lista após sair
+      carregarZonas(); 
     } catch (erro: any) {
       Alert.alert("Erro no Checkout", erro.response?.data || "Nenhum check-in ativo.");
+    } finally {
+      setLoadingCheckout(false);
     }
   };
 
@@ -43,10 +48,9 @@ export default function Home({ setTelaAtual, idUsuarioLogado, setIdUsuarioLogado
       <FlatList
         data={zonas}
         keyExtractor={(item) => item.idZona.toString()}
-        refreshing={false}
+        refreshing={loading} // Mostra a bolinha nativa ao puxar para atualizar
         onRefresh={carregarZonas}
         renderItem={({ item }) => {
-          // Cálculo de vagas livres e cores
           const vagasLivres = item.capacidadeMaxima - item.vagasOcupadas;
           const corStatus = vagasLivres === 0 ? '#ff4757' : (vagasLivres <= 5 ? '#ffa502' : '#2ed573');
 
@@ -69,8 +73,12 @@ export default function Home({ setTelaAtual, idUsuarioLogado, setIdUsuarioLogado
           <Text style={styles.scanButtonText}>Ler QR Code (Check-in)</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.checkoutHomeButton} onPress={handleCheckout}>
-          <Text style={styles.checkoutButtonText}>Fazer Checkout (Sair)</Text>
+        <TouchableOpacity style={styles.checkoutHomeButton} onPress={handleCheckout} disabled={loadingCheckout}>
+          {loadingCheckout ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.checkoutButtonText}>Fazer Checkout (Sair)</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -90,6 +98,6 @@ const styles = StyleSheet.create({
   homeButtonsContainer: { padding: 20, paddingBottom: 40 },
   scanButton: { backgroundColor: '#61dafb', padding: 15, borderRadius: 8, alignItems: 'center', marginBottom: 10 },
   scanButtonText: { color: '#1c1c1c', fontSize: 18, fontWeight: 'bold' },
-  checkoutHomeButton: { backgroundColor: '#ff4757', padding: 15, borderRadius: 8, alignItems: 'center' },
+  checkoutHomeButton: { backgroundColor: '#ff4757', padding: 15, borderRadius: 8, alignItems: 'center', height: 55, justifyContent: 'center' },
   checkoutButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
