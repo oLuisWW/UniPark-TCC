@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Alert, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
-import * as Location from 'expo-location'; // Biblioteca de GPS
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
 
-// Coordenadas da Unibave (Orleans - SC)
 const UNIBAVE_LAT = -28.3444;
 const UNIBAVE_LON = -49.2758;
-const RAIO_PERMITIDO_METROS = 500; // O motorista precisa estar num raio de 500 metros
+const RAIO_PERMITIDO_METROS = 50000; // Mantido alto para você testar de casa
 
-// Fórmula de Haversine para calcular distância entre duas coordenadas em metros
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371e3; // Raio da Terra
+  const R = 6371e3; 
   const rad = Math.PI / 180;
   const dLat = (lat2 - lat1) * rad;
   const dLon = (lon2 - lon1) * rad;
@@ -23,7 +22,7 @@ export default function Home({ setTelaAtual, idUsuarioLogado, setIdUsuarioLogado
   const [zonas, setZonas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCheckout, setLoadingCheckout] = useState(false);
-  const [loadingGps, setLoadingGps] = useState(false); // Estado para o botão da câmera
+  const [loadingGps, setLoadingGps] = useState(false);
 
   const carregarZonas = async () => {
     setLoading(true);
@@ -57,22 +56,17 @@ export default function Home({ setTelaAtual, idUsuarioLogado, setIdUsuarioLogado
   const handleAbrirCamera = async () => {
     setLoadingGps(true);
     try {
-      // 1. Pede permissão de localização ao telemóvel
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Aviso', 'Precisamos do GPS para confirmar que está no campus da Unibave.');
         return;
       }
 
-      // 2. Obtém a coordenada atual do motorista
       const location = await Location.getCurrentPositionAsync({});
-      
-      // 3. Calcula a distância entre o motorista e a Unibave
       const distancia = calcularDistancia(location.coords.latitude, location.coords.longitude, UNIBAVE_LAT, UNIBAVE_LON);
 
-      // 4. Valida a distância
       if (distancia <= RAIO_PERMITIDO_METROS) {
-        setTelaAtual('camera'); // Libera a leitura do QR Code
+        setTelaAtual('camera'); 
       } else {
         Alert.alert('Fora do Campus', `Está a ${Math.round(distancia)} metros da Unibave. Aproxime-se para validar a vaga.`);
       }
@@ -83,11 +77,18 @@ export default function Home({ setTelaAtual, idUsuarioLogado, setIdUsuarioLogado
     }
   };
 
+  // Nova função para fazer Logout e limpar o AsyncStorage
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('@unipark_idUsuario');
+    setIdUsuarioLogado(null);
+    setTelaAtual('login');
+  };
+
   return (
     <View style={styles.homeContainer}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Vagas Campus</Text>
-        <TouchableOpacity onPress={() => { setIdUsuarioLogado(null); setTelaAtual('login'); }}>
+        <TouchableOpacity onPress={handleLogout}>
           <Text style={styles.logoutText}>Sair</Text>
         </TouchableOpacity>
       </View>

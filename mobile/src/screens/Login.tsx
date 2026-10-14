@@ -1,24 +1,30 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, Alert, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
 
 export default function Login({ setTelaAtual, setIdUsuarioLogado }: any) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [loading, setLoading] = useState(false); // Novo estado de carregamento
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !senha) return Alert.alert("Aviso", "Preencha todos os campos.");
     
-    setLoading(true); // Liga a animação
+    setLoading(true);
     try {
       const resposta = await api.post('/api/usuarios/login', null, { params: { email, senha } });
-      setIdUsuarioLogado(resposta.data);
+      const idUsuario = resposta.data.toString();
+      
+      // Salva o ID permanentemente no dispositivo
+      await AsyncStorage.setItem('@unipark_idUsuario', idUsuario);
+      
+      setIdUsuarioLogado(idUsuario);
       setTelaAtual('home');
     } catch (erro: any) {
       Alert.alert("Acesso Negado", "Email ou senha incorretos.");
     } finally {
-      setLoading(false); // Desliga a animação, quer dê erro ou sucesso
+      setLoading(false);
     }
   };
 
@@ -45,7 +51,6 @@ export default function Login({ setTelaAtual, setIdUsuarioLogado }: any) {
         secureTextEntry 
       />
       
-      {/* Botão desativado enquanto carrega e mostra o Spinner */}
       <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
         {loading ? (
           <ActivityIndicator size="small" color="#1c1c1c" />
