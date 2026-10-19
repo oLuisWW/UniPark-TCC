@@ -6,7 +6,7 @@ import { api } from '../services/api';
 
 const UNIBAVE_LAT = -28.3444;
 const UNIBAVE_LON = -49.2758;
-const RAIO_PERMITIDO_METROS = 50000; // Mantido alto para você testar de casa
+const RAIO_PERMITIDO_METROS = 500; // Mantido alto para você testar de casa
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371e3; 

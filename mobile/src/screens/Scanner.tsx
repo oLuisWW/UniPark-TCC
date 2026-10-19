@@ -6,34 +6,47 @@ import { api } from '../services/api';
 export default function Scanner({ setTelaAtual, idUsuarioLogado }: any) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  const [loading, setLoading] = useState(false); // Novo estado
+  const [loading, setLoading] = useState(false);
 
   if (!permission) return <View style={styles.container} />;
   
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.text}>O UniPark precisa acessar sua câmera.</Text>
-        <Button onPress={requestPermission} title="Liberar Câmera" />
+        <Text style={styles.text}>O UniPark precisa de aceder à sua câmara.</Text>
+        <Button onPress={requestPermission} title="Permitir Câmara" />
       </View>
     );
   }
 
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
     setScanned(true); 
-    setLoading(true); // Inicia animação ao ler o QR Code
+    setLoading(true); 
     try {
       const resposta = await api.post('/api/estacionamento/checkin', null, {
         params: { idUsuario: idUsuarioLogado, idZona: data }
       });
       
-      Alert.alert("Check-in Realizado!", resposta.data, [
-        { text: "Ver Vagas", onPress: () => { setScanned(false); setTelaAtual('home'); } }
-      ]);
+      // A resposta do Spring Boot é algo como "check-in feito na zona: b1"
+      // Vamos extrair apenas a parte depois dos dois pontos (:) e colocar em maiúsculas
+      const mensagemDoServidor = resposta.data;
+      let nomeZona = data; // Fallback para o ID (3) caso a extração falhe
+      
+      if (typeof mensagemDoServidor === 'string' && mensagemDoServidor.includes(':')) {
+        nomeZona = mensagemDoServidor.split(':')[1].trim().toUpperCase();
+      }
+      
+      Alert.alert(
+        "Entrada Registrada", 
+        `O seu veículo foi alocado na zona ${nomeZona} com sucesso.`, 
+        [
+          { text: "Confirmar", onPress: () => { setScanned(false); setTelaAtual('home'); } }
+        ]
+      );
     } catch (erro: any) {
       Alert.alert("Erro", erro.response?.data, [{ text: "Voltar", onPress: () => { setScanned(false); setTelaAtual('home'); } }]);
     } finally {
-      setLoading(false); // Para a animação
+      setLoading(false); 
     }
   };
 
@@ -50,7 +63,6 @@ export default function Scanner({ setTelaAtual, idUsuarioLogado }: any) {
           <Text style={styles.logoutButtonText}>Voltar</Text>
         </TouchableOpacity>
         
-        {/* Se estiver carregando, mostra o spinner. Se não, mostra o texto */}
         {loading ? (
           <ActivityIndicator size="large" color="#61dafb" style={styles.loader} />
         ) : (
